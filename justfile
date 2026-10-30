@@ -1,56 +1,71 @@
 # 2026 해커톤 서버 접속 토이킷 (just)
 # just 가 없으면 동일 기능의 ./hak 셸 스크립트를 쓰세요.
-# 사용 전: cp .env.example .env  후 값 입력
+#
+# 사용 전 1회:  cp .env.example .env  후 값 입력
+#
+# 알아야 할 명령은 이게 전부입니다:
+#   just ssh-gpu        just ssh-general        # 서버 접속
+#   just upload-gpu <로컬> [원격]               # 업로드
+#   just download-gpu <원격> [로컬]             # 다운로드
+#   just down                                   # 정리 / 초기화
+# (컨테이너 시작·VPN 연결은 자동. 최초 접속 때 OTP만 한 번 입력)
 
 _default:
     @just --list
 
-# 이미지 빌드 + 접속 컨테이너 시작 (백그라운드 유지)
-up:
-    @test -f .env || { echo ".env 가 없습니다. cp .env.example .env 후 값을 채우세요."; exit 1; }
-    @touch known_hosts
-    docker compose up -d --build
+# GPU 서버 터미널 접속
+ssh-gpu: _up
+    docker compose exec -it access ssh-to.sh gpu
 
-# 컨테이너 중지/제거
+# 일반 서버 터미널 접속
+ssh-general: _up
+    docker compose exec -it access ssh-to.sh general
+
+# GPU 서버로 업로드 (원격 생략 시 ~/).  예) just upload-gpu /work/transfer/data.zip
+upload-gpu file dest="": _up
+    docker compose exec -it access upload.sh gpu "{{file}}" {{dest}}
+
+# 일반 서버로 업로드 (원격 생략 시 ~/)
+upload-general file dest="": _up
+    docker compose exec -it access upload.sh general "{{file}}" {{dest}}
+
+# GPU 서버에서 다운로드 (로컬 생략 시 ./transfer).  예) just download-gpu ~/result.zip
+download-gpu remote dest="": _up
+    docker compose exec -it access download.sh gpu "{{remote}}" {{dest}}
+
+# 일반 서버에서 다운로드 (로컬 생략 시 ./transfer)
+download-general remote dest="": _up
+    docker compose exec -it access download.sh general "{{remote}}" {{dest}}
+
+# 정리 (컨테이너 제거 = VPN 끊김). 다시 접속하면 처음부터 자동 재연결.
 down:
     docker compose down
 
-# 컨테이너 로그
+# ── 이하 내부/디버깅용 (평소엔 쓸 일 없음) ───────────────────────
+
+# 컨테이너가 떠 있도록 보장 (다른 명령들이 의존).
+[private]
+_up:
+    @test -f .env || { echo ".env 가 없습니다. cp .env.example .env 후 값을 채우세요."; exit 1; }
+    @touch known_hosts
+    @docker compose up -d --build >/dev/null
+
+[private]
+check target="": _up
+    docker compose exec -it access check.sh {{target}}
+
+[private]
+shell: _up
+    docker compose exec -it access bash
+
+[private]
 logs:
     docker compose logs -f access
 
-# 컨테이너 안으로 셸 진입
-shell:
-    docker compose exec -it access bash
-
-# SSL-VPN 연결 (OTP 입력, 이 터미널 유지)
-vpn:
+[private]
+vpn: _up
     docker compose exec -it access vpn.sh
 
-# VPN 연결 후 서버 SSH 포트 도달 점검 (target: general|gpu, 생략 시 둘 다)
-check target="":
-    docker compose exec access check.sh {{target}}
-
-# 일반 서버 터미널 접속
-ssh-general:
-    docker compose exec -it access ssh-to.sh general
-
-# GPU 서버 터미널 접속
-ssh-gpu:
-    docker compose exec -it access ssh-to.sh gpu
-
-# 일반 서버로 업로드 (dest 생략 시 ~/)
-upload-general file dest="":
-    docker compose exec access upload.sh general "{{file}}" {{dest}}
-
-# GPU 서버로 업로드 (dest 생략 시 ~/)
-upload-gpu file dest="":
-    docker compose exec access upload.sh gpu "{{file}}" {{dest}}
-
-# 일반 서버에서 다운로드 (dest 생략 시 /work/transfer/)
-download-general remote dest="":
-    docker compose exec access download.sh general "{{remote}}" {{dest}}
-
-# GPU 서버에서 다운로드 (dest 생략 시 /work/transfer/)
-download-gpu remote dest="":
-    docker compose exec access download.sh gpu "{{remote}}" {{dest}}
+[private]
+vpn-stop:
+    docker compose exec access vpn-stop.sh

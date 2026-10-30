@@ -26,15 +26,14 @@ VPN 사용 시 호스트에 `/dev/net/tun` 이 필요합니다(리눅스 기본 
   just up
   ```
   mise 가 셸에 활성화돼 있지 않으면 `mise exec -- just <명령>` 형태로 쓰세요.
-- **`just` 없이**: 동일 기능의 셸 래퍼 `./hak <명령>` (예: `./hak up`, `./hak vpn`, `./hak ssh-gpu`)
+- **`just` 없이**: 동일 기능의 셸 래퍼 `./hak <명령>` (예: `./hak ssh-gpu`, `./hak down`)
 
 아래 예시는 `just` 기준이며, 모든 명령은 `./hak` 로도 동일하게 동작합니다.
 
-## 1. 준비
+## 1. 준비 (한 번만)
 
 ```bash
 cp .env.example .env     # 값 입력 (아래 항목 참고)
-just up                  # 이미지 빌드 + 접속 컨테이너 시작  (또는 ./hak up)
 ```
 
 `.env` 에 채울 값:
@@ -42,34 +41,31 @@ just up                  # 이미지 빌드 + 접속 컨테이너 시작  (또�
 | 구분 | 키 | 설명 |
 |------|----|------|
 | VPN | `VPN_SERVER`, `VPN_PORT` | 게이트웨이 (기본: `sslvpn-kr-vpc-02.gov-ncloud.com:8443`) |
-| VPN | `VPN_ID`, `VPN_PW` | VPN 접속 ID/PW (OTP는 연결 시 직접 입력) |
+| VPN | `VPN_ID`, `VPN_PW` | VPN 접속 ID/PW (OTP는 접속 시 자동으로 물어봄) |
 | 일반 서버 | `GENERAL_HOSTNAME`, `GENERAL_IP`, `GENERAL_USER`, `GENERAL_PASSWORD`, `GENERAL_SSH_PORT` | `USER` 기본 `ncloud`, 포트 기본 `22` |
 | GPU 서버 | `GPU_HOSTNAME`, `GPU_IP`, `GPU_USER`, `GPU_PASSWORD`, `GPU_SSH_PORT` | 동일 |
 
 > `.env` 는 `.gitignore` 로 커밋되지 않습니다. 비밀번호·OTP를 공유하지 마세요.
 
-## 2. VPN 연결
+## 2. 접속 (이게 전부)
 
 ```bash
-just vpn     # OTP 코드를 물어보면 이메일/SMS로 받은 코드 입력, 이 터미널은 켜 둔 채 유지
-```
-
-연결을 유지한 상태에서 **다른 터미널**을 열어 아래 명령을 사용합니다.
-도달 확인:
-
-```bash
-just check   # 각 서버 SSH 포트가 열려 있는지 점검
-```
-
-## 3. 터미널 접속
-
-```bash
-just ssh-gpu        # GPU 서버 셸
+just ssh-gpu        # GPU 서버 셸   (또는 ./hak ssh-gpu)
 just ssh-general    # 일반 서버 셸
 ```
 
+이 한 줄이 **컨테이너 시작 → VPN 연결 → SSH 접속**을 알아서 처리합니다.
+- VPN이 안 떠 있으면 자동으로 연결하며, **이때 OTP 코드만 한 번 입력**하면 됩니다.
+- 한 번 연결되면 컨테이너가 연결을 유지하므로, 이후 `just ssh-*` 는 바로 붙습니다.
+
 GPU 확인: 접속 후 `nvidia-smi`,
 `python3 -c "import torch; print(torch.cuda.is_available())"`.
+
+도달 점검이 필요하면:
+
+```bash
+just check          # 각 서버 SSH 포트 도달 확인 (필요 시 VPN 자동 연결)
+```
 
 ## 4. 파일 업로드 / 다운로드
 
@@ -90,26 +86,26 @@ just download-gpu ~/result.zip
 
 `rsync` 기반이라 진행률 표시·재개·대용량 전송에 유리합니다.
 
-## 명령 요약
+## 명령 요약 (이게 전부)
 
-`just` 와 `./hak` 모두 동일한 명령을 제공합니다.
+`just` 와 `./hak` 모두 동일합니다. 알아야 할 명령은 아래 7개뿐입니다.
 
 ```bash
-just               # 전체 명령 목록
-just up            # 컨테이너 시작
-just vpn           # VPN 연결 (OTP)
-just check         # 포트 도달 점검
-just ssh-gpu       # / ssh-general
-just upload-gpu <로컬경로> [원격경로]
-just download-gpu <원격경로> [로컬경로]
-just shell         # 컨테이너 내부 셸
-just down          # 정리
+just ssh-gpu                         # GPU 서버 접속   / just ssh-general
+just upload-gpu   <로컬경로> [원격경로]    # 업로드
+just download-gpu <원격경로> [로컬경로]    # 다운로드
+just down                            # 정리 / 초기화
 ```
+
+컨테이너 시작과 VPN 연결은 전부 자동입니다. 문제가 생기면 `just down` 후 다시
+`just ssh-*` 하면 처음부터 재연결(OTP 재입력)됩니다.
+
+> 참고: 디버깅용 숨은 명령(`check`, `shell`, `logs`, `vpn-stop`)도 있지만 평소엔 필요 없습니다.
 
 ## VPN 클라이언트에 대한 참고 (중요)
 
 이 토이킷의 VPN 연결은 `openfortivpn`(Fortinet 계열 SSL-VPN CLI)을 사용합니다.
-공공존 게이트웨이가 Fortinet 호환이 **아닐 경우** `just vpn` 이 실패할 수 있습니다.
+공공존 게이트웨이가 Fortinet 호환이 **아닐 경우** 자동 VPN 연결이 실패할 수 있습니다.
 공공존 VPC는 Windows/macOS용 공식 *NAVER Cloud SSL VPN Agent* 만 제공하며
 Linux CLI는 공식 지원되지 않습니다.
 

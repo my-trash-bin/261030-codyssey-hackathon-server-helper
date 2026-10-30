@@ -9,6 +9,7 @@ resolve_target "${1:-}"; shift || true
 REMOTE="${1:?내려받을 원격 경로를 지정하세요}"; shift || true
 DEST="${1:-/work/transfer/}"
 
+ensure_vpn "$IP"
 echo ">> 다운로드: ${LABEL}:${REMOTE} → $DEST" >&2
 export SSHPASS="$PASS"
 exec rsync -avz --progress \

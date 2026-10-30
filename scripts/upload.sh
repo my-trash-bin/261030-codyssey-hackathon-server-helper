@@ -15,6 +15,7 @@ if [[ ! -e "$SRC" ]]; then
   exit 2
 fi
 
+ensure_vpn "$IP"
 echo ">> 업로드: $SRC → ${LABEL}:${DEST}" >&2
 export SSHPASS="$PASS"
 exec rsync -avz --progress \

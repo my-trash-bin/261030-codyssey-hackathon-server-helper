@@ -6,6 +6,7 @@ source /opt/scripts/_common.sh
 
 check_one() {
   resolve_target "$1"
+  ensure_vpn "$IP"
   printf '%-10s %s:%s ... ' "$LABEL" "$IP" "$PORT"
   if nc -z -w 5 "$IP" "$PORT" 2>/dev/null; then
     echo "OK (포트 열림)"

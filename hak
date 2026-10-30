@@ -1,32 +1,34 @@
 #!/usr/bin/env sh
-# make 없이 docker 만으로 쓰는 래퍼.
-#   ./hak up | vpn | check | shell | down
-#   ./hak ssh-gpu | ssh-general
-#   ./hak upload-gpu <로컬경로> [원격경로]
-#   ./hak download-gpu <원격경로> [로컬경로]
+# just 없이 docker 만으로 쓰는 래퍼. 알아야 할 명령은 이게 전부:
+#   ./hak ssh-gpu          ./hak ssh-general        # 서버 접속(컨테이너+VPN 자동)
+#   ./hak upload-gpu <로컬> [원격]                   # 업로드
+#   ./hak download-gpu <원격> [로컬]                 # 다운로드
+#   ./hak down                                      # 정리 / 초기화
 set -eu
-DC="docker compose"
-EXEC="$DC exec access"
-EXECIT="$DC exec -it access"
+
+ensure_up() {
+  [ -f .env ] || { echo ".env 가 없습니다. cp .env.example .env 후 값을 채우세요."; exit 1; }
+  touch known_hosts
+  docker compose up -d --build >/dev/null
+}
 
 cmd="${1:-help}"; shift 2>/dev/null || true
+EX="docker compose exec -it access"
 
 case "$cmd" in
-  up)
-    [ -f .env ] || { echo ".env 가 없습니다. cp .env.example .env 후 값을 채우세요."; exit 1; }
-    touch known_hosts
-    $DC up -d --build ;;
-  down)   $DC down ;;
-  logs)   $DC logs -f access ;;
-  shell)  $EXECIT bash ;;
-  vpn)    $EXECIT vpn.sh ;;
-  check)  $EXEC check.sh "$@" ;;
-  ssh-general) $EXECIT ssh-to.sh general ;;
-  ssh-gpu)     $EXECIT ssh-to.sh gpu ;;
-  upload-general)   $EXEC upload.sh general "$@" ;;
-  upload-gpu)       $EXEC upload.sh gpu "$@" ;;
-  download-general) $EXEC download.sh general "$@" ;;
-  download-gpu)     $EXEC download.sh gpu "$@" ;;
+  up)     ensure_up; echo ">> 준비 완료. ./hak ssh-gpu 로 접속하세요." ;;
+  down)   docker compose down ;;
+  logs)   docker compose logs -f access ;;
+  shell)  ensure_up; $EX bash ;;
+  ssh-general)      ensure_up; $EX ssh-to.sh general ;;
+  ssh-gpu)          ensure_up; $EX ssh-to.sh gpu ;;
+  upload-general)   ensure_up; $EX upload.sh general "$@" ;;
+  upload-gpu)       ensure_up; $EX upload.sh gpu "$@" ;;
+  download-general) ensure_up; $EX download.sh general "$@" ;;
+  download-gpu)     ensure_up; $EX download.sh gpu "$@" ;;
+  check)            ensure_up; $EX check.sh "$@" ;;
+  vpn)              ensure_up; $EX vpn.sh ;;
+  vpn-stop)         docker compose exec access vpn-stop.sh ;;
   help|*)
     sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

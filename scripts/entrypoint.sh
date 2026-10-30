@@ -5,15 +5,6 @@ mkdir -p /root/.ssh /work/transfer
 chmod 700 /root/.ssh
 touch /root/.ssh/known_hosts
 
-cat <<'EOF'
-┌───────────────────────────────────────────────────────────┐
-│  hackathon-access 컨테이너 준비 완료                        │
-│                                                           │
-│  1) VPN 연결 :  make vpn        (OTP 입력, 터미널 유지)     │
-│  2) 터미널   :  make ssh-gpu  /  make ssh-general          │
-│  3) 업로드   :  make upload-gpu FILE=...                   │
-│  4) 다운로드 :  make download-gpu REMOTE=...               │
-└───────────────────────────────────────────────────────────┘
-EOF
+echo ">> hackathon-access 컨테이너 준비 완료. host에서 'just ssh-gpu' 등으로 접속하세요."
 
 exec sleep infinity

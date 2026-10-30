@@ -4,6 +4,7 @@
 set -euo pipefail
 source /opt/scripts/_common.sh
 resolve_target "${1:-}"; shift || true
+ensure_vpn "$IP"
 
 echo ">> ${LABEL}(${IP}:${PORT}) 로 ${USER_} 계정 접속" >&2
 export SSHPASS="$PASS"
