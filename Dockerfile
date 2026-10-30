@@ -2,8 +2,9 @@ FROM debian:bookworm-slim
 
 # SSL-VPN 클라이언트 + SSH/SFTP/전송 도구
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        openconnect \
-        vpnc-scripts \
+        openvpn \
+        curl \
+        jq \
         openssh-client \
         sshpass \
         rsync \

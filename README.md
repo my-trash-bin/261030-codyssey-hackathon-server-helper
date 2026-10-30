@@ -104,21 +104,21 @@ just down                            # 정리 / 초기화
 
 ## VPN 클라이언트에 대한 참고
 
-NCP 공공존 SSL VPN은 **F5 BIG-IP Edge** 기반입니다. 공식 Agent는 Windows/macOS
-전용이지만, 리눅스에서는 **`openconnect --protocol=f5`** 로 붙을 수 있어 이 토이킷은
-컨테이너 안에서 openconnect로 자동 연결합니다 (별도 VM·공식 Agent 불필요).
+NCP 공공존 SSL VPN은 **OpenVPN 기반**입니다. 공식 Agent(Windows/macOS)는 openvpn을
+품은 앱일 뿐이라, 리눅스에서는 컨테이너 안의 `openvpn` 으로 그대로 붙습니다
+(별도 VM·공식 Agent 불필요).
 
-인증 흐름: 비밀번호는 `.env` 에서 자동 입력되고, **OTP(이메일/SMS 코드)만 접속 시
-한 번 터미널에서 입력**하면 됩니다.
+연결 흐름(자동):
+1. `.env` 의 ID/PW 로 인증 포털 `https://<VPN_SERVER>:<VPN_PORT>/api/v3/authstate` 호출
+2. 성공하면 **SMS/이메일로 OTP 발송** + `.ovpn` 프로필(base64) 수신
+3. 터미널에 **OTP 한 번 입력** → `openvpn` 이 아이디+OTP 로 터널 연결 (포트 12000~13000)
 
-자동 연결이 안 되면 아래로 수동 확인할 수 있습니다(비번·OTP 모두 직접 입력):
+즉 사용자는 **OTP만 한 번** 입력하면 됩니다. 비밀번호는 `.env` 에서 자동 사용됩니다.
 
-```bash
-docker compose exec -it access sh -c \
-  'openconnect --protocol=f5 -u "$VPN_ID" "https://$VPN_SERVER:$VPN_PORT"'
-```
-
-연결 문제 시 점검 순서(VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`)를 따르세요.
+연결 문제 시:
+- `1차 인증 실패` → `.env` 의 `VPN_ID`/`VPN_PW` 확인 (포털 응답의 `err_msg` 를 그대로 보여줍니다).
+- `프로필 오류` 류 → `.env` 의 `VPN_OVPN_NAME` 을 운영진 안내값으로 교체.
+- 그 외 점검 순서: VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`.
 
 ## 서버 반납 일정
 
