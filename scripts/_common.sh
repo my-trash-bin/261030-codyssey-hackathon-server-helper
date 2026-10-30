@@ -151,8 +151,10 @@ ensure_vpn() {
 
   echo ">> OpenVPN 터널 연결 중..." >&2
   : > "$log"
+  # 압축 옵션은 프로필 설정을 그대로 따른다. CLI 로 --allow-compression 을 덧대면
+  # 프로필에 'allow-compression no' 가 있을 때 2.6 에서 충돌한다
+  # (Cannot set allow-compression to 'yes' after set to 'no').
   openvpn --config "$prof" --auth-user-pass "$authf" --auth-nocache --reneg-sec 0 \
-    --allow-compression yes \
     --daemon --log "$log" --writepid /run/vpn.pid
 
   local i
