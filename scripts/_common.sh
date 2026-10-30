@@ -153,33 +153,73 @@ ensure_vpn() {
   local _re; _re="$(printf '%s' "$_removed" | tr ' ' '|')"
   sed -i -E "s/^[[:space:]]*(${_re})([[:space:]].*)?\$/# [removed-for-openvpn2.6] &/" "$prof" 2>/dev/null || true
 
-  # openvpn 터널 인증: 아이디 + OTP(없으면 비밀번호). 연결 후 authf 삭제.
+  # ── openvpn 터널 인증 ─────────────────────────────────────────
+  # 프로필은 (인증서 블록 + auth-user-pass) 구성이다. auth-user-pass 의 비밀번호로
+  # 무엇을 쓰는지가 테넌트마다 다르다:
+  #   · 어떤 테넌트: OTP 자체가 터널 비번
+  #   · 공공존(이 게이트웨이): OTP는 '프로필(인증서) 발급 게이트'일 뿐이고,
+  #     터널 인증에는 '계정 비밀번호(VPN_PW)'를 쓴다 — OTP를 넣으면 AUTH_FAILED.
+  # 그래서 기본(auto)은 OTP로 시도 → AUTH_FAILED면 계정 비밀번호로 자동 재시도한다.
+  # VPN_AUTH_MODE=otp|password 로 특정 방식만 강제할 수 있다.
   umask 077
-  if [[ -n "$otp" ]]; then printf '%s\n%s\n' "$VPN_ID" "$otp" > "$authf"
-  else printf '%s\n%s\n' "$VPN_ID" "$VPN_PW" > "$authf"; fi
+
+  # openvpn 한 번 시도. 인자: 터널 비밀번호(아이디는 VPN_ID). 반환 0=성공 1=AUTH_FAILED 2=기타
+  _vpn_try() {
+    local pass="$1" i
+    printf '%s\n%s\n' "$VPN_ID" "$pass" > "$authf"
+    : > "$log"
+    openvpn --config "$prof" --auth-user-pass "$authf" --auth-nocache --reneg-sec 0 \
+      --daemon --log "$log" --writepid /run/vpn.pid
+    for i in $(seq 1 60); do
+      if grep -q "Initialization Sequence Completed" "$log" 2>/dev/null && _vpn_up; then
+        rm -f "$authf"; return 0
+      fi
+      if grep -qiE "AUTH_FAILED|auth-failure" "$log" 2>/dev/null; then
+        rm -f "$authf"
+        [[ -s /run/vpn.pid ]] && kill "$(cat /run/vpn.pid)" 2>/dev/null || true
+        sleep 2   # 관리포트(7501) 해제 대기 — 재시도 충돌 방지
+        return 1
+      fi
+      if grep -qiE "Exiting due to fatal error" "$log" 2>/dev/null; then
+        rm -f "$authf"
+        [[ -s /run/vpn.pid ]] && kill "$(cat /run/vpn.pid)" 2>/dev/null || true
+        sleep 2; return 2
+      fi
+      sleep 1
+    done
+    rm -f "$authf"
+    [[ -s /run/vpn.pid ]] && kill "$(cat /run/vpn.pid)" 2>/dev/null || true
+    return 2
+  }
 
   echo ">> OpenVPN 터널 연결 중..." >&2
-  : > "$log"
-  # 압축 옵션은 프로필 설정을 그대로 따른다. CLI 로 --allow-compression 을 덧대면
-  # 프로필에 'allow-compression no' 가 있을 때 2.6 에서 충돌한다
-  # (Cannot set allow-compression to 'yes' after set to 'no').
-  openvpn --config "$prof" --auth-user-pass "$authf" --auth-nocache --reneg-sec 0 \
-    --daemon --log "$log" --writepid /run/vpn.pid
+  local mode="${VPN_AUTH_MODE:-auto}" rc
+  case "$mode" in
+    password)
+      echo ">> (VPN_AUTH_MODE=password) 계정 비밀번호로 터널 인증" >&2
+      _vpn_try "$VPN_PW"; rc=$? ;;
+    otp)
+      _vpn_try "${otp:-$VPN_PW}"; rc=$? ;;
+    *)  # auto
+      if [[ -n "$otp" ]]; then
+        _vpn_try "$otp"; rc=$?
+        if [[ $rc -eq 1 ]]; then
+          echo ">> OTP로 터널 인증 실패(AUTH_FAILED). 계정 비밀번호로 재시도합니다..." >&2
+          _vpn_try "$VPN_PW"; rc=$?
+          if [[ $rc -eq 0 ]]; then
+            echo ">> (참고) 이 게이트웨이는 터널 인증에 '계정 비밀번호'를 씁니다." >&2
+            echo ">>        다음부터 .env 에 VPN_AUTH_MODE=password 를 넣으면 OTP 재시도를 건너뜁니다." >&2
+          fi
+        fi
+      else
+        _vpn_try "$VPN_PW"; rc=$?
+      fi ;;
+  esac
 
-  local i
-  for i in $(seq 1 60); do
-    if grep -q "Initialization Sequence Completed" "$log" 2>/dev/null && _vpn_up; then
-      rm -f "$authf"
-      sleep 1; _vpn_route "$ip"
-      echo ">> VPN 연결됨." >&2
-      return 0
-    fi
-    if grep -qiE "AUTH_FAILED|auth-failure|Exiting due to fatal error" "$log" 2>/dev/null; then
-      rm -f "$authf"
-      echo ">> OpenVPN 인증/연결 실패. 최근 로그:" >&2; tail -n 20 "$log" >&2; return 1
-    fi
-    sleep 1
-  done
-  rm -f "$authf"
-  echo ">> VPN 연결 시간 초과. 최근 로그:" >&2; tail -n 25 "$log" >&2; return 1
+  if [[ $rc -eq 0 ]]; then
+    sleep 1; _vpn_route "$ip"
+    echo ">> VPN 연결됨." >&2
+    return 0
+  fi
+  echo ">> OpenVPN 인증/연결 실패. 최근 로그:" >&2; tail -n 25 "$log" >&2; return 1
 }

@@ -155,8 +155,11 @@ NCP 공공존 SSL VPN은 **OpenVPN 기반**입니다. 공식 Agent(Windows/macOS
 1. `.env` 의 ID/PW 로 `POST /api/v3/authstate` (`type:"profile"`) → `state` 수신 +
    **SMS/이메일로 OTP 발송**
 2. 터미널에 **OTP 한 번 입력**
-3. `POST /api/v3/profile` 에 `state`+OTP 전달 → **올바른 `.ovpn` 프로필 자동 수신**
-4. `openvpn` 이 같은 아이디+OTP 로 터널 연결 (포트 12000~13000)
+3. `POST /api/v3/profile` 에 `state`+OTP 전달 → **올바른 `.ovpn` 프로필(인증서 포함) 자동 수신**
+4. `openvpn` 이 그 프로필(인증서)로 터널 연결 (포트 12000~13000).
+   터널 인증 비밀번호는 **auto** 로 처리됩니다: OTP로 시도 → 실패 시 **계정 비밀번호**로 자동 재시도.
+   이 공공존 게이트웨이는 터널 인증에 계정 비밀번호를 쓰므로(OTP는 3번 프로필 발급용),
+   한 번 확인되면 `.env` 에 `VPN_AUTH_MODE=password` 로 두면 OTP 재시도를 건너뜁니다.
 
 즉 사용자는 **OTP만 한 번** 입력하면 끝입니다. 비밀번호는 `.env` 에서 자동 사용됩니다.
 (프로필만 미리 받아두고 싶으면 `python3 tools/fetch-ovpn.py` 로 동일 흐름을 돌릴 수 있습니다.)
