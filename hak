@@ -5,7 +5,7 @@
 #   ./hak download-gpu <원격> [로컬]                 # 다운로드
 #   ./hak shutdown                                  # 종료(저장된 프로필 유지)
 #   ./hak remove                                    # 종료 + 저장된 인증 정보 삭제
-#   ./hak get-ovpn                                  # (최초 1회) 공식 앱의 .ovpn 추출
+#   ./hak get-ovpn                                  # (대안) 공식 앱의 .ovpn 추출. 평소 불필요
 set -eu
 
 ensure_up() {

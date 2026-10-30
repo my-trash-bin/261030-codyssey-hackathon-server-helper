@@ -33,10 +33,10 @@ resolve_target() {
 }
 
 # ── VPN 자동 연결 (OpenVPN / NCP v3 API) ──────────────────────
-# NCP 공공존 SSL VPN은 OpenVPN 기반이다. :8443 은 인증 포털 API(/api/v3/authstate),
-# 실제 터널은 응답으로 받은 .ovpn 프로필의 원격 포트(12000~13000)로 붙는다.
-# 흐름: ID/PW 로 authstate 호출 → 성공 시 SMS OTP 발송 + .ovpn(base64) 수신
-#       → 아이디+OTP 로 openvpn 인증.
+# NCP 공공존 SSL VPN은 OpenVPN 기반이며, 공식 Agent(ncurion-sa-client)와 동일한 2단계다:
+#   ① POST /api/v3/authstate (type:"profile") → state 수신 + OTP(SMS/메일) 발송
+#   ② POST /api/v3/profile   (state + OTP)     → 올바른 .ovpn(profile_body) 수신
+# 받은 .ovpn 의 원격 포트(12000~13000)로 openvpn 터널을 붙이며, 같은 OTP 를 터널 인증에 쓴다.
 # tun 인터페이스 존재 = VPN 연결됨으로 판단.
 _vpn_up() { ip -o link show type tun 2>/dev/null | grep -q .; }
 _vpn_dev() { ip -o link show type tun 2>/dev/null | awk -F': ' 'NR==1{sub(/@.*/,"",$2); print $2}'; }
@@ -60,7 +60,7 @@ ensure_vpn() {
   : "${VPN_PORT:=8443}"
   : "${VPN_ID:?VPN_ID가 .env에 없습니다}"
   : "${VPN_PW:?VPN_PW가 .env에 없습니다}"
-  local ovpn_name="${VPN_OVPN_NAME:-vpn2033.ovpn}"
+  local cver="${VPN_CLIENT_VERSION:-1.1.4}"
 
   if ! { : < /dev/tty; } 2>/dev/null; then
     echo ">> VPN 연결에는 OTP 입력(터미널)이 필요합니다." >&2
@@ -68,62 +68,78 @@ ensure_vpn() {
     return 1
   fi
 
-  local api="https://${VPN_SERVER}:${VPN_PORT}/api/v3/authstate"
-  # prof(.ovpn)은 영속 볼륨(/data/vpn)에 저장 → shutdown 후에도 재사용. ('remove' 시 삭제)
-  # authf(아이디+OTP)는 1회용이라 ephemeral(/run/vpn)에 두고 연결 후 즉시 삭제.
+  local base="https://${VPN_SERVER}:${VPN_PORT}"
+  # prof(.ovpn)은 영속 볼륨(/data/vpn)에 저장. authf(아이디+OTP)는 1회용이라 ephemeral(/run/vpn).
   local prof=/data/vpn/profile.ovpn authf=/run/vpn/auth log=/var/log/vpn.log
   mkdir -p /data/vpn /run/vpn; chmod 700 /data/vpn /run/vpn
 
-  local mac
-  mac="$(ip -o link show 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="link/ether"){m=$(i+1); gsub(":","-",m); print toupper(m); exit}}')"
-  [[ -z "$mac" ]] && mac="00-00-00-00-00-00"
+  # v3 API 호출 (헤더 Api-Version:1). 공식 앱은 TLS 검증을 끄므로(NODE_TLS_REJECT_UNAUTHORIZED=0)
+  # 기본 검증으로 먼저 시도하고, 빈 응답이면 -k(검증 생략)로 1회 폴백한다.
+  _vpn_api() {
+    local path="$1" data="$2" r
+    r="$(curl -s -m 20 -H 'Content-Type: application/json' -H 'Api-Version: 1' \
+          -X POST "${base}${path}" --data-binary "$data" 2>/dev/null)"
+    [[ -z "$r" ]] && r="$(curl -sk -m 20 -H 'Content-Type: application/json' -H 'Api-Version: 1' \
+          -X POST "${base}${path}" --data-binary "$data" 2>/dev/null)"
+    printf '%s' "$r"
+  }
 
-  local body resp
-  body="$(jq -nc --arg u "$VPN_ID" --arg p "$VPN_PW" --arg o "$ovpn_name" --arg m "$mac" \
-    '{user_id:$u, passwd:$p, type:"connect", ovpn_file_name:$o, client_version:"1.1.3", os_name:"linux", os_version:"docker", mac:[$m]}')"
-
+  # ① authstate (type:"profile") → state + OTP 발송
   echo "" >&2
   echo ">> SSL-VPN 1차 인증 중 (ID/PW)..." >&2
-  resp="$(curl -s -m 20 -H 'Content-Type: application/json' -H 'Api-Version: 1' \
-    -X POST "$api" --data-binary "$body")"
-
+  local resp
+  resp="$(_vpn_api /api/v3/authstate "$(jq -nc --arg u "$VPN_ID" --arg p "$VPN_PW" --arg cv "$cver" \
+    '{user_id:$u, passwd:$p, type:"profile", client_version:$cv, os_name:"linux", os_version:"docker"}')")"
   if [[ "$(printf '%s' "$resp" | jq -r '.success' 2>/dev/null)" != "true" ]]; then
-    echo ">> 1차 인증 실패: $(printf '%s' "$resp" | jq -r '.err_msg // "알 수 없는 오류(응답 파싱 실패)"' 2>/dev/null)" >&2
+    echo ">> 1차 인증 실패: $(printf '%s' "$resp" | jq -r '.err_msg // "알 수 없는 오류(ID/PW 확인)"' 2>/dev/null)" >&2
     return 1
+  fi
+  local state pbody
+  state="$(printf '%s' "$resp" | jq -r '.state // ""' 2>/dev/null)"
+  pbody="$(printf '%s' "$resp" | jq -r '.profile_body // ""' 2>/dev/null)"
+
+  # OTP 입력 (state 가 있으면 2차 인증 필요)
+  local otp=""
+  if [[ -n "$state" ]]; then
+    echo ">> 1차 인증 성공. 이메일/SMS로 받은 OTP 코드를 입력하고 Enter:" >&2
+    IFS= read -r otp < /dev/tty
+    [[ -z "$otp" ]] && { echo ">> OTP가 입력되지 않았습니다." >&2; return 1; }
+  else
+    echo ">> 1차 인증 성공 (OTP 불필요)." >&2
   fi
 
   # 프로필(.ovpn) 확보 우선순위:
-  #   ① 사용자가 둔 로컬 파일(공식 앱에서 받은 것) → ② 이전에 저장해 둔 프로필(볼륨)
-  #   → ③ authstate 응답의 profile_body (받으면 볼륨에 저장해 다음부터 재사용)
-  local localprof="${VPN_PROFILE:-/work/transfer/naver-vpn.ovpn}" pbody
+  #   ① 사용자가 둔 로컬 파일(공식 앱에서 받은 것) → ② authstate 직수신(profile_body)
+  #   → ③ /api/v3/profile 다운로드 (state + OTP)
+  local localprof="${VPN_PROFILE:-/work/transfer/naver-vpn.ovpn}"
   if [[ -s "$localprof" ]]; then
-    cp "$localprof" "$prof"
-    echo ">> 로컬 프로필 사용: $localprof" >&2
-  elif [[ -s "$prof" ]]; then
-    echo ">> 저장된 프로필 재사용: $prof  (초기화하려면 'just remove')" >&2
+    cp "$localprof" "$prof"; echo ">> 로컬 프로필 사용: $localprof" >&2
+  elif [[ -n "$pbody" && "$pbody" != "null" ]]; then
+    printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null \
+      || { echo ">> 프로필 디코드 실패" >&2; return 1; }
+    echo ">> 프로필 수신 완료." >&2
   else
-    pbody="$(printf '%s' "$resp" | jq -r '.profile_body // ""')"
-    if [[ -z "$pbody" ]]; then
-      echo ">> 서버가 프로필(.ovpn)을 주지 않았습니다. 서버 메시지:" >&2
-      echo "   $(printf '%s' "$resp" | jq -r '.err_msg // "(없음)"' 2>/dev/null)" >&2
-      echo ">> 해결: .env 의 VPN_OVPN_NAME 을 이 테넌트의 올바른 프로필(예: vpn<번호>.ovpn)로 바꾸세요." >&2
-      echo ">> (번호는 운영진에게 'SSL-VPN 프로필/서버 번호' 로 문의. 또는 공식 앱에서 받은 .ovpn 파일을" >&2
-      echo ">>  ./transfer/naver-vpn.ovpn 로 두면 그대로 사용합니다.)" >&2
+    echo ">> 프로필 다운로드 중 (/api/v3/profile)..." >&2
+    local resp2 pbody2 pname
+    resp2="$(_vpn_api /api/v3/profile "$(jq -nc --arg u "$VPN_ID" --arg o "$otp" --arg s "$state" --arg cv "$cver" \
+      '{user_id:$u, auth_type:1, otp_passwd:$o, state:$s, client_version:$cv, os_name:"linux", os_version:"docker"}')")"
+    if [[ "$(printf '%s' "$resp2" | jq -r '.success' 2>/dev/null)" != "true" ]]; then
+      echo ">> 프로필 다운로드 실패: $(printf '%s' "$resp2" | jq -r '.err_msg // "알 수 없는 오류"' 2>/dev/null)" >&2
+      echo ">> (OTP가 틀렸거나 만료됐을 수 있습니다. 다시 접속을 시도하세요.)" >&2
       return 1
     fi
-    printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || \
-      printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null || \
-      { echo ">> 프로필 디코드 실패" >&2; return 1; }
-    echo ">> 프로필을 저장했습니다(다음부터 재사용): $prof" >&2
+    pbody2="$(printf '%s' "$resp2" | jq -r '.profile_body // ""')"
+    pname="$(printf '%s' "$resp2" | jq -r '.profile_name // "profile"')"
+    if [[ -z "$pbody2" || "$pbody2" == "null" ]]; then echo ">> 응답에 프로필이 없습니다." >&2; return 1; fi
+    printf '%s' "$pbody2" | base64 -d > "$prof" 2>/dev/null || printf '%s' "$pbody2" | base64 -di > "$prof" 2>/dev/null \
+      || { echo ">> 프로필 디코드 실패" >&2; return 1; }
+    echo ">> 프로필 저장: $pname" >&2
   fi
 
-  local otp
-  echo ">> 1차 인증 성공. 이메일/SMS로 받은 OTP 코드를 입력하고 Enter:" >&2
-  IFS= read -r otp < /dev/tty
-  if [[ -z "$otp" ]]; then echo ">> OTP가 입력되지 않았습니다." >&2; return 1; fi
-
+  # openvpn 터널 인증: 아이디 + OTP(없으면 비밀번호). 연결 후 authf 삭제.
   umask 077
-  printf '%s\n%s\n' "$VPN_ID" "$otp" > "$authf"
+  if [[ -n "$otp" ]]; then printf '%s\n%s\n' "$VPN_ID" "$otp" > "$authf"
+  else printf '%s\n%s\n' "$VPN_ID" "$VPN_PW" > "$authf"; fi
 
   echo ">> OpenVPN 터널 연결 중..." >&2
   : > "$log"

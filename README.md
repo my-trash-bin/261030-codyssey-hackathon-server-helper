@@ -47,29 +47,8 @@ cp .env.example .env     # 값 입력 (아래 항목 참고)
 
 > `.env` 는 `.gitignore` 로 커밋되지 않습니다. 비밀번호·OTP를 공유하지 마세요.
 
-## 1-2. (최초 1회) VPN 프로필(.ovpn) 확보 — 계정마다 다름
-
-이 공공존 테넌트는 로그인 시 서버 선택 **"메뉴" 단계**가 있어서, 올바른 `.ovpn` 프로필은
-**공식 SSL VPN 클라이언트로 한 번 로그인**해서 받는 것이 가장 확실합니다.
-프로필은 **계정(테넌트)마다 다를 수 있어** 저장소에 포함하지 않으며(= `transfer/` 는 gitignore),
-각 참가자가 아래 흐름으로 직접 추출합니다.
-
-1. **공식 SSL VPN 클라이언트 설치** — NCP 공공 콘솔 → `SSL VPN` 메뉴에서 다운로드,
-   또는 운영진(김진현/차진우 매니저)에게 클라이언트 링크 요청.
-2. **앱으로 한 번 로그인** — ID/PW + OTP, 메뉴에서 해커톤 서버 선택
-   (성공해야 프로필이 생성·저장됩니다).
-3. **프로필 추출** (호스트에서, 컨테이너 불필요):
-   ```bash
-   just get-ovpn            # 또는 ./hak get-ovpn
-   # 경로를 직접 알면:  just get-ovpn ~/Downloads/vpnXXXX.ovpn
-   ```
-   → 앱이 저장한 `.ovpn` 을 찾아 `transfer/naver-vpn.ovpn` 로 복사하고,
-   번호(`VPN_OVPN_NAME=vpnXXXX.ovpn`)를 출력합니다.
-   - **파일만 있어도** 접속 시 자동 사용됩니다.
-   - 출력된 번호를 `.env` 의 `VPN_OVPN_NAME` 에 넣어두면 파일 없이도 매번 서버에서 받아옵니다.
-
-> 대안(공식 앱 없이): `python3 tools/fetch-ovpn.py` 로 API에서 바로 받아볼 수 있으나,
-> 메뉴형 테넌트에서는 실패할 수 있습니다(그땐 위 추출 흐름을 사용하세요).
+> 프로필(.ovpn)은 접속할 때 **자동으로 받아옵니다.** 미리 준비할 것은 위 `.env` 뿐입니다.
+> (공식 앱 설치·프로필 번호 입력 모두 불필요 — 아래 "VPN 클라이언트에 대한 참고" 참조.)
 
 ## 2. 접속 (이게 전부)
 
@@ -115,7 +94,6 @@ just download-gpu ~/result.zip
 `just` 와 `./hak` 모두 동일합니다. 알아야 할 명령은 이게 전부입니다.
 
 ```bash
-just get-ovpn                        # (최초 1회) 공식 앱의 .ovpn 추출 → transfer/
 just ssh-gpu                         # GPU 서버 접속   / just ssh-general
 just upload-gpu   <로컬경로> [원격경로]    # 업로드
 just download-gpu <원격경로> [로컬경로]    # 다운로드
@@ -134,7 +112,8 @@ just remove                          # 종료 + 저장된 인증 정보까지 �
   OTP는 한 번 더 입력해야 합니다(VPN 2차 인증 특성).
 - `remove` 는 저장된 프로필까지 지워 **완전 초기화**합니다. 문제가 꼬였을 때 쓰세요.
 
-> 참고: 디버깅용 숨은 명령(`check`, `shell`, `logs`, `vpn-stop`)도 있지만 평소엔 필요 없습니다.
+> 참고: `just get-ovpn` 은 자동 수신이 안 될 때 공식 앱의 `.ovpn` 을 추출하는 **대안**입니다(평소엔 불필요).
+> 그 밖의 디버깅용 숨은 명령(`check`, `shell`, `logs`, `vpn-stop`)도 평소엔 필요 없습니다.
 
 ## VPN 클라이언트에 대한 참고
 
@@ -142,19 +121,22 @@ NCP 공공존 SSL VPN은 **OpenVPN 기반**입니다. 공식 Agent(Windows/macOS
 품은 앱일 뿐이라, 리눅스에서는 컨테이너 안의 `openvpn` 으로 그대로 붙습니다
 (별도 VM·공식 Agent 불필요).
 
-연결 흐름(자동):
-1. `.env` 의 ID/PW 로 인증 포털 `https://<VPN_SERVER>:<VPN_PORT>/api/v3/authstate` 호출
-2. 성공하면 **SMS/이메일로 OTP 발송** + `.ovpn` 프로필(base64) 수신
-3. 터미널에 **OTP 한 번 입력** → `openvpn` 이 아이디+OTP 로 터널 연결 (포트 12000~13000)
+이 도구는 공식 Agent(`ncurion-sa-client`)와 **똑같은 2단계 v3 API** 를 수행하므로,
+프로필 번호를 몰라도 되고 공식 앱도 필요 없습니다. 연결 흐름(자동):
+1. `.env` 의 ID/PW 로 `POST /api/v3/authstate` (`type:"profile"`) → `state` 수신 +
+   **SMS/이메일로 OTP 발송**
+2. 터미널에 **OTP 한 번 입력**
+3. `POST /api/v3/profile` 에 `state`+OTP 전달 → **올바른 `.ovpn` 프로필 자동 수신**
+4. `openvpn` 이 같은 아이디+OTP 로 터널 연결 (포트 12000~13000)
 
-즉 사용자는 **OTP만 한 번** 입력하면 됩니다. 비밀번호는 `.env` 에서 자동 사용됩니다.
+즉 사용자는 **OTP만 한 번** 입력하면 끝입니다. 비밀번호는 `.env` 에서 자동 사용됩니다.
+(프로필만 미리 받아두고 싶으면 `python3 tools/fetch-ovpn.py` 로 동일 흐름을 돌릴 수 있습니다.)
 
 연결 문제 시:
 - `1차 인증 실패` → `.env` 의 `VPN_ID`/`VPN_PW` 확인 (포털 응답의 `err_msg` 를 그대로 보여줍니다).
-- `서버가 프로필(.ovpn)을 주지 않았습니다 (ovpn file not found ...)` → 이 테넌트는
-  로그인 메뉴 단계가 있어 번호를 추측할 수 없습니다. **공식 앱으로 한 번 로그인한 뒤
-  `just get-ovpn`** 으로 프로필을 추출하세요(위 "1-2. VPN 프로필 확보" 참고).
-  번호를 운영진에게 받았다면 `.env` 의 `VPN_OVPN_NAME` 에 넣어도 됩니다.
+- `프로필 다운로드 실패` → OTP 가 틀렸거나 만료됨. 다시 접속을 시도하세요(새 OTP 발송).
+- (대안) 자동 수신이 끝내 안 되면, 공식 앱으로 한 번 로그인한 뒤 `just get-ovpn` 으로
+  프로필을 추출해 `transfer/naver-vpn.ovpn` 에 두면 그 파일을 그대로 씁니다.
 - 그 외 점검 순서: VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`.
 
 ## 서버 반납 일정
