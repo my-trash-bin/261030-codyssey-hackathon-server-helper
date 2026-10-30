@@ -30,21 +30,6 @@ VPN 사용 시 호스트에 `/dev/net/tun` 이 필요합니다(리눅스 기본 
 
 아래 예시는 `just` 기준이며, 모든 명령은 `./hak` 로도 동일하게 동작합니다.
 
-## 바로 실행
-
-```bash
-./run.sh            # GPU 서버 접속 (기본)
-./run.sh general    # 일반 서버 접속
-./run.sh down       # 컨테이너 종료 / VPN 연결 해제
-```
-
-Docker가 설치된 환경에서 실행하세요. 최초 실행 시 `.env`를 자동 생성하고
-`${VISUAL:-${EDITOR:-vi}}` 편집기로 엽니다. VPN 계정과 접속할 서버의 IP/비밀번호를
-입력한 뒤 저장하고 종료하면 컨테이너 시작 → VPN 연결 → SSH 접속을 진행합니다.
-기존 `.env`는 그대로 사용하며, VPN 연결 시 OTP를 입력해야 합니다.
-`./run.sh upload-gpu ...`처럼 기존 `hak` 명령도 전달할 수 있습니다.
-스크립트의 절대 경로로 실행하면 다른 디렉터리에서도 사용할 수 있습니다.
-
 ## 1. 준비 (한 번만)
 
 ```bash
@@ -139,3 +124,23 @@ Linux CLI는 공식 지원되지 않습니다.
 이 저장소는 **Codyssey Hackathon Server Helper License (Usage-Disclosure License v1.0)** 를 따릅니다.
 자유롭게 사용·수정·배포할 수 있으나, **사용 시 "이 소프트웨어를 사용했다"는 사실을
 공개적으로(또는 비공개 사용 시 내부 기록으로) 남겨야 합니다.** 전문은 [`LICENSE`](./LICENSE) 참고.
+
+## 개발: 원격 저장소를 GitHub에 푸시
+
+`gh`에 로그인된 PC에서 다음 스크립트를 실행하세요.
+
+```bash
+./push.sh
+```
+
+기본으로 `remote-sub-1:/home/mjy/tmp`의 `main` 커밋 이력을 임시 디렉터리로
+가져와 이 PC의 GitHub 인증으로 이 저장소에 푸시합니다. 원격 서버에 인증 정보를
+복사하지 않으며, 작업 후 임시 디렉터리는 제거합니다. 원격 서버에서 먼저 커밋해야
+하며, 커밋되지 않은 변경은 포함하지 않습니다. 강제 푸시는 하지 않습니다.
+스크립트는 어느 디렉터리에서든 실행할 수 있습니다.
+
+다른 호스트·경로·대상·브랜치도 지정할 수 있습니다.
+
+```bash
+./push.sh remote-sub-1 /home/mjy/tmp https://github.com/my-trash-bin/261030-codyssey-hackathon-server-helper.git main
+```
