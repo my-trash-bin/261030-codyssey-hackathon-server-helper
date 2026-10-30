@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+# make 없이 docker 만으로 쓰는 래퍼.
+#   ./hak up | vpn | check | shell | down
+#   ./hak ssh-gpu | ssh-general
+#   ./hak upload-gpu <로컬경로> [원격경로]
+#   ./hak download-gpu <원격경로> [로컬경로]
+set -eu
+DC="docker compose"
+EXEC="$DC exec access"
+EXECIT="$DC exec -it access"
+
+cmd="${1:-help}"; shift 2>/dev/null || true
+
+case "$cmd" in
+  up)
+    [ -f .env ] || { echo ".env 가 없습니다. cp .env.example .env 후 값을 채우세요."; exit 1; }
+    touch known_hosts
+    $DC up -d --build ;;
+  down)   $DC down ;;
+  logs)   $DC logs -f access ;;
+  shell)  $EXECIT bash ;;
+  vpn)    $EXECIT vpn.sh ;;
+  check)  $EXEC check.sh "$@" ;;
+  ssh-general) $EXECIT ssh-to.sh general ;;
+  ssh-gpu)     $EXECIT ssh-to.sh gpu ;;
+  upload-general)   $EXEC upload.sh general "$@" ;;
+  upload-gpu)       $EXEC upload.sh gpu "$@" ;;
+  download-general) $EXEC download.sh general "$@" ;;
+  download-gpu)     $EXEC download.sh gpu "$@" ;;
+  help|*)
+    sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac

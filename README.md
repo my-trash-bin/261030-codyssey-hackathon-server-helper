@@ -13,11 +13,20 @@ Docker 하나로 처리하는 도구 모음입니다. 일반 서버·GPU 서버 
 VPN 연결을 컨테이너가 보유하고, SSH·전송 명령은 같은 컨테이너에서(`docker compose exec`)
 실행되므로 VPN 라우팅을 그대로 탑니다.
 
+## 요구 사항
+
+**Docker(+ compose plugin)만 있으면 됩니다.** VPN 클라이언트·ssh·rsync 등은 모두 이미지 안에 포함됩니다.
+VPN 사용 시 호스트에 `/dev/net/tun` 이 필요합니다(리눅스 기본 존재).
+
+명령 실행은 두 가지 중 편한 쪽을 쓰세요.
+- `make` 가 있으면 → 아래 `make <명령>`
+- `make` 가 없으면 → 동일 기능의 셸 래퍼 `./hak <명령>` (예: `./hak up`, `./hak vpn`, `./hak ssh-gpu`)
+
 ## 1. 준비
 
 ```bash
 cp .env.example .env     # 값 입력 (아래 항목 참고)
-make up                  # 이미지 빌드 + 접속 컨테이너 시작
+make up                  # 이미지 빌드 + 접속 컨테이너 시작  (또는 ./hak up)
 ```
 
 `.env` 에 채울 값:
