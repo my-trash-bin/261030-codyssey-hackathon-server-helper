@@ -114,6 +114,8 @@ ensure_vpn() {
   local localprof="${VPN_PROFILE:-/work/transfer/naver-vpn.ovpn}"
   if [[ -s "$localprof" ]]; then
     cp "$localprof" "$prof"; echo ">> 로컬 프로필 사용: $localprof" >&2
+  elif [[ "${VPN_REFRESH:-0}" != "1" && -s "$prof" ]]; then
+    echo ">> 저장된 프로필 재사용: $prof  (새로 받으려면 VPN_REFRESH=1 또는 'just remove')" >&2
   elif [[ -n "$pbody" && "$pbody" != "null" ]]; then
     printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null \
       || { echo ">> 프로필 디코드 실패" >&2; return 1; }
