@@ -3,6 +3,7 @@
 #   ./hak ssh-gpu          ./hak ssh-general        # 서버 접속(컨테이너+VPN 자동)
 #   ./hak upload-gpu <로컬> [원격]                   # 업로드
 #   ./hak download-gpu <원격> [로컬]                 # 다운로드
+#   ./hak ssh-config [install]                       # 호스트에서 scp/ssh 를 바로 쓰게 config 생성
 #   ./hak shutdown                                  # 종료(저장된 프로필 유지)
 #   ./hak remove                                    # 종료 + 저장된 인증 정보 삭제
 #   ./hak get-ovpn                                  # (대안) 공식 앱의 .ovpn 추출. 평소 불필요
@@ -21,6 +22,7 @@ case "$cmd" in
   up)       ensure_up; echo ">> 준비 완료. ./hak ssh-gpu 로 접속하세요." ;;
   shutdown) docker compose down ;;
   remove)   docker compose down --volumes; echo ">> 저장된 VPN 프로필을 삭제했습니다. (직접 둔 ./transfer/naver-vpn.ovpn 는 필요 시 수동 삭제)" ;;
+  ssh-config) bash tools/gen-ssh-config.sh "$@" ;;
   get-ovpn) bash tools/extract-ovpn.sh "$@" ;;
   logs)     docker compose logs -f access ;;
   shell)  ensure_up; $EX bash ;;
@@ -34,5 +36,5 @@ case "$cmd" in
   vpn)              ensure_up; $EX vpn.sh ;;
   vpn-stop)         docker compose exec access vpn-stop.sh ;;
   help|*)
-    sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

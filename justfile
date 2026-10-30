@@ -7,6 +7,7 @@
 #   just ssh-gpu        just ssh-general        # 서버 접속
 #   just upload-gpu <로컬> [원격]               # 업로드
 #   just download-gpu <원격> [로컬]             # 다운로드
+#   just ssh-config [install]                   # 호스트에서 scp/ssh 를 바로 쓰게 config 생성
 #   just shutdown                               # 종료(저장된 프로필은 유지)
 #   just remove                                 # 종료 + 저장된 인증 정보까지 삭제
 #   just get-ovpn                               # (대안) 공식 앱의 .ovpn 추출. 평소엔 불필요
@@ -49,6 +50,12 @@ remove:
     docker compose down --volumes
     @echo ">> 저장된 VPN 프로필을 삭제했습니다."
     @echo ">> (직접 둔 ./transfer/naver-vpn.ovpn 가 있다면 필요 시 수동 삭제하세요.)"
+
+# 호스트에서 ssh/scp/rsync 를 컨테이너(VPN) 경유로 바로 쓰도록 ssh config 생성.
+#   just ssh-config            # ./ssh_config 생성 → scp -F ./ssh_config ./파일 hack-gpu:~/
+#   just ssh-config install    # ~/.ssh/config 등록 → scp ./파일 hack-gpu:~/ (바로)
+ssh-config *args:
+    bash tools/gen-ssh-config.sh {{args}}
 
 # 경로를 직접 줄 수도 있음:  just get-ovpn ~/Downloads/vpn2051.ovpn
 # (대안) 공식 앱이 저장한 .ovpn 을 transfer/ 로 추출 (평소엔 자동 수신되어 불필요).

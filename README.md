@@ -89,14 +89,43 @@ just download-gpu ~/result.zip
 
 `rsync` 기반이라 진행률 표시·재개·대용량 전송에 유리합니다.
 
+## 4-1. 호스트에서 `scp`/`ssh` 바로 쓰기 (복사 단계 없이)
+
+`./transfer` 로 미리 옮길 필요 없이, **호스트의 아무 경로나** 바로 주고받고 싶으면
+ssh config 를 한 번 만들어 두세요. VPN을 쥔 컨테이너를 `ProxyCommand` 로 경유하므로
+평소 쓰던 `ssh`/`scp`/`rsync` 가 그대로 동작합니다.
+
+```bash
+just ssh-config install     # ~/.ssh/config 에 hack-gpu / hack-general 등록 (또는 ./hak ssh-config install)
+```
+
+이후 어디서든:
+
+```bash
+ssh hack-gpu                         # GPU 서버 셸
+scp ./data.zip hack-gpu:~/           # 업로드 (경로 제한 없음)
+scp -r ./mydir hack-gpu:~/datasets/  # 폴더 업로드
+scp hack-gpu:~/result.zip ./         # 다운로드 (원하는 위치로)
+rsync -avP ./big hack-gpu:~/         # rsync 도 그대로
+```
+
+- `install` 대신 `just ssh-config` 만 쓰면 `./ssh_config` 파일로 생성됩니다
+  (`scp -F ./ssh_config ./data.zip hack-gpu:~/` 식으로 `-F` 지정).
+- 최초 연결 때 **컨테이너·VPN이 자동으로 뜨고 OTP를 한 번** 물어봅니다(이후 유지).
+- 서버는 비밀번호 인증이라 접속 시 **서버 비밀번호**(`.env` 의 `*_PASSWORD`)를 입력합니다.
+  비밀번호 입력 없이 쓰려면 위의 `just upload-*/download-*`(sshpass 자동) 를 쓰거나 공개키를 등록하세요.
+- `ssh_config` 에는 서버 IP·계정이 들어가므로 커밋되지 않습니다(`.gitignore`).
+  제거는 `just ssh-config uninstall`.
+
 ## 명령 요약 (이게 전부)
 
 `just` 와 `./hak` 모두 동일합니다. 알아야 할 명령은 이게 전부입니다.
 
 ```bash
 just ssh-gpu                         # GPU 서버 접속   / just ssh-general
-just upload-gpu   <로컬경로> [원격경로]    # 업로드
-just download-gpu <원격경로> [로컬경로]    # 다운로드
+just upload-gpu   <로컬경로> [원격경로]    # 업로드 (./transfer 경유)
+just download-gpu <원격경로> [로컬경로]    # 다운로드 (./transfer 경유)
+just ssh-config install              # 호스트에서 scp/ssh 를 경로 제한 없이 바로 쓰기
 just shutdown                        # 종료 (저장된 프로필은 유지)
 just remove                          # 종료 + 저장된 인증 정보까지 삭제 (완전 초기화)
 ```

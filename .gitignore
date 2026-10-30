@@ -10,6 +10,9 @@ transfer/*
 # SSH known_hosts collected at runtime
 known_hosts
 
+# 생성된 ssh config (서버 IP/계정 포함) — 커밋하지 않음
+ssh_config
+
 # 참고용 가이드 문서 (커밋하지 않음)
 *.pdf
 
