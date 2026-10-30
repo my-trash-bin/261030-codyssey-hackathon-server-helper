@@ -9,6 +9,7 @@
 #   just download-gpu <원격> [로컬]             # 다운로드
 #   just shutdown                               # 종료(저장된 프로필은 유지)
 #   just remove                                 # 종료 + 저장된 인증 정보까지 삭제
+#   just get-ovpn                               # (최초 1회) 공식 앱의 .ovpn 추출
 # (컨테이너 시작·VPN 연결은 자동. 최초 접속 때 OTP만 한 번 입력.
 #  OTP는 1회용이라 저장 불가 — 컨테이너를 켜 두면 재입력 없이 계속 사용 가능)
 
@@ -48,6 +49,11 @@ remove:
     docker compose down --volumes
     @echo ">> 저장된 VPN 프로필을 삭제했습니다."
     @echo ">> (직접 둔 ./transfer/naver-vpn.ovpn 가 있다면 필요 시 수동 삭제하세요.)"
+
+# 경로를 직접 줄 수도 있음:  just get-ovpn ~/Downloads/vpn2051.ovpn
+# (최초 1회) 공식 앱이 저장한 .ovpn 을 transfer/ 로 추출 (호스트 실행, 컨테이너 불필요).
+get-ovpn *args:
+    bash tools/extract-ovpn.sh {{args}}
 
 # ── 이하 내부/디버깅용 (평소엔 쓸 일 없음) ───────────────────────
 

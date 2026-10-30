@@ -47,6 +47,30 @@ cp .env.example .env     # 값 입력 (아래 항목 참고)
 
 > `.env` 는 `.gitignore` 로 커밋되지 않습니다. 비밀번호·OTP를 공유하지 마세요.
 
+## 1-2. (최초 1회) VPN 프로필(.ovpn) 확보 — 계정마다 다름
+
+이 공공존 테넌트는 로그인 시 서버 선택 **"메뉴" 단계**가 있어서, 올바른 `.ovpn` 프로필은
+**공식 SSL VPN 클라이언트로 한 번 로그인**해서 받는 것이 가장 확실합니다.
+프로필은 **계정(테넌트)마다 다를 수 있어** 저장소에 포함하지 않으며(= `transfer/` 는 gitignore),
+각 참가자가 아래 흐름으로 직접 추출합니다.
+
+1. **공식 SSL VPN 클라이언트 설치** — NCP 공공 콘솔 → `SSL VPN` 메뉴에서 다운로드,
+   또는 운영진(김진현/차진우 매니저)에게 클라이언트 링크 요청.
+2. **앱으로 한 번 로그인** — ID/PW + OTP, 메뉴에서 해커톤 서버 선택
+   (성공해야 프로필이 생성·저장됩니다).
+3. **프로필 추출** (호스트에서, 컨테이너 불필요):
+   ```bash
+   just get-ovpn            # 또는 ./hak get-ovpn
+   # 경로를 직접 알면:  just get-ovpn ~/Downloads/vpnXXXX.ovpn
+   ```
+   → 앱이 저장한 `.ovpn` 을 찾아 `transfer/naver-vpn.ovpn` 로 복사하고,
+   번호(`VPN_OVPN_NAME=vpnXXXX.ovpn`)를 출력합니다.
+   - **파일만 있어도** 접속 시 자동 사용됩니다.
+   - 출력된 번호를 `.env` 의 `VPN_OVPN_NAME` 에 넣어두면 파일 없이도 매번 서버에서 받아옵니다.
+
+> 대안(공식 앱 없이): `python3 tools/fetch-ovpn.py` 로 API에서 바로 받아볼 수 있으나,
+> 메뉴형 테넌트에서는 실패할 수 있습니다(그땐 위 추출 흐름을 사용하세요).
+
 ## 2. 접속 (이게 전부)
 
 ```bash
@@ -88,9 +112,10 @@ just download-gpu ~/result.zip
 
 ## 명령 요약 (이게 전부)
 
-`just` 와 `./hak` 모두 동일합니다. 알아야 할 명령은 아래 7개뿐입니다.
+`just` 와 `./hak` 모두 동일합니다. 알아야 할 명령은 이게 전부입니다.
 
 ```bash
+just get-ovpn                        # (최초 1회) 공식 앱의 .ovpn 추출 → transfer/
 just ssh-gpu                         # GPU 서버 접속   / just ssh-general
 just upload-gpu   <로컬경로> [원격경로]    # 업로드
 just download-gpu <원격경로> [로컬경로]    # 다운로드
@@ -126,11 +151,10 @@ NCP 공공존 SSL VPN은 **OpenVPN 기반**입니다. 공식 Agent(Windows/macOS
 
 연결 문제 시:
 - `1차 인증 실패` → `.env` 의 `VPN_ID`/`VPN_PW` 확인 (포털 응답의 `err_msg` 를 그대로 보여줍니다).
-- `서버가 프로필(.ovpn)을 주지 않았습니다 (ovpn file not found ...)` → 프로필 번호가 테넌트마다
-  다릅니다. `.env` 의 `VPN_OVPN_NAME` 을 올바른 번호(예: `vpn2051.ovpn`)로 바꾸세요.
-  번호는 **운영진에게 'SSL-VPN 프로필/서버 번호'** 로 문의하면 됩니다.
-  - 대안: 공식 Agent(Windows/macOS)에서 받은 `.ovpn` 파일이 있으면 `./transfer/naver-vpn.ovpn`
-    로 두면 그대로 사용합니다(번호 몰라도 됨).
+- `서버가 프로필(.ovpn)을 주지 않았습니다 (ovpn file not found ...)` → 이 테넌트는
+  로그인 메뉴 단계가 있어 번호를 추측할 수 없습니다. **공식 앱으로 한 번 로그인한 뒤
+  `just get-ovpn`** 으로 프로필을 추출하세요(위 "1-2. VPN 프로필 확보" 참고).
+  번호를 운영진에게 받았다면 `.env` 의 `VPN_OVPN_NAME` 에 넣어도 됩니다.
 - 그 외 점검 순서: VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`.
 
 ## 서버 반납 일정

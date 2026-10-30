@@ -12,3 +12,7 @@ known_hosts
 
 # 참고용 가이드 문서 (커밋하지 않음)
 *.pdf
+
+# Python 캐시 (tools/)
+__pycache__/
+*.pyc
