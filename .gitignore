@@ -1,0 +1,14 @@
+# Secrets — never commit real credentials
+.env
+*.env
+!.env.example
+
+# Transfer staging (keep the folder, ignore its contents)
+transfer/*
+!transfer/.gitkeep
+
+# SSH known_hosts collected at runtime
+known_hosts
+
+# 참고용 가이드 문서 (커밋하지 않음)
+*.pdf

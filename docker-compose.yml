@@ -1,0 +1,16 @@
+services:
+  access:
+    build: .
+    image: hackathon-access:latest
+    container_name: hackathon-access
+    env_file: .env
+    cap_add:
+      - NET_ADMIN            # VPN 라우팅/인터페이스 구성
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./transfer:/work/transfer   # 서버와 주고받을 파일 공유 폴더
+      - ./known_hosts:/root/.ssh/known_hosts
+    stdin_open: true
+    tty: true
+    restart: "no"
