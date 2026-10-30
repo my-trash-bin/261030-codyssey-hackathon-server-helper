@@ -1,0 +1,5 @@
+# mise 로 just 를 설치합니다.
+#   mise install      # just 설치
+#   mise exec -- just # 또는 셸에 mise 활성화 후 just 사용
+[tools]
+just = "latest"
