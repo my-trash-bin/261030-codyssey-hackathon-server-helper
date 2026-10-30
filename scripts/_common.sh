@@ -136,6 +136,12 @@ ensure_vpn() {
     echo ">> 프로필 저장: $pname" >&2
   fi
 
+  # 벤더 프로필은 구버전 openvpn 기준이라 2.6 에서 제거된 지시어가 있을 수 있다.
+  # 해당 줄을 주석 처리해 파싱 에러를 막는다(예: keysize 는 2.6 에서 제거됨).
+  local _removed='keysize ncp-disable tls-remote max-routes ns-cert-type key-method'
+  local _re; _re="$(printf '%s' "$_removed" | tr ' ' '|')"
+  sed -i -E "s/^[[:space:]]*(${_re})([[:space:]].*)?\$/# [removed-for-openvpn2.6] &/" "$prof" 2>/dev/null || true
+
   # openvpn 터널 인증: 아이디 + OTP(없으면 비밀번호). 연결 후 authf 삭제.
   umask 077
   if [[ -n "$otp" ]]; then printf '%s\n%s\n' "$VPN_ID" "$otp" > "$authf"
@@ -144,6 +150,7 @@ ensure_vpn() {
   echo ">> OpenVPN 터널 연결 중..." >&2
   : > "$log"
   openvpn --config "$prof" --auth-user-pass "$authf" --auth-nocache --reneg-sec 0 \
+    --allow-compression yes \
     --daemon --log "$log" --writepid /run/vpn.pid
 
   local i
