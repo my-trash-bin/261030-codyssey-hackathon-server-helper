@@ -15,21 +15,17 @@ the Software is furnished to do so, subject to the following conditions:
    all copies or substantial portions of the Software.
 
 2. Usage Disclosure (the "Disclosure Requirement").
-   Any User who uses the Software, in whole or in part, whether directly, in a
-   modified form, or as a component of a larger work, MUST publicly and
-   conspicuously record and disclose the fact that the Software was used.
-   The disclosure MUST:
-     (a) state that the Software ("Codyssey Hackathon Server Helper") was used;
-     (b) be placed where recipients or users of the resulting work can
-         reasonably find it — for example, in a README, documentation, an
-         "About"/"Acknowledgements"/"Credits" section, a NOTICE file, release
-         notes, or an equivalent publicly accessible location; and
-     (c) remain in place for as long as the resulting work is distributed,
-         published, or operated.
+   If you use this Software, in whole or in part, in connection with the
+   2026 Codyssey Hackathon (2026 코디세이 해커톤), you MUST include at least one
+   line in your presentation/demo materials stating that you used the server
+   connection tool made by team "지피에게 물어보죠".
+   A sufficient disclosure reads, for example (Korean or English):
+     - "서버 연결에 '지피에게 물어보죠' 팀의 연결 툴을 사용했습니다."
+     - "We used the connection tool by team '지피에게 물어보죠'."
 
-   Private, local use that produces no distributed, published, or externally
-   operated work still satisfies this condition if the User keeps an internal,
-   datable record that the Software was used.
+   For any other use outside that hackathon, you must likewise state somewhere
+   reasonably visible (e.g., README, Acknowledgements, or release notes) that
+   you used this Software by team "지피에게 물어보죠".
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
