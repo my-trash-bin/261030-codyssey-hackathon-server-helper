@@ -117,7 +117,11 @@ NCP 공공존 SSL VPN은 **OpenVPN 기반**입니다. 공식 Agent(Windows/macOS
 
 연결 문제 시:
 - `1차 인증 실패` → `.env` 의 `VPN_ID`/`VPN_PW` 확인 (포털 응답의 `err_msg` 를 그대로 보여줍니다).
-- `프로필 오류` 류 → `.env` 의 `VPN_OVPN_NAME` 을 운영진 안내값으로 교체.
+- `서버가 프로필(.ovpn)을 주지 않았습니다 (ovpn file not found ...)` → 프로필 번호가 테넌트마다
+  다릅니다. `.env` 의 `VPN_OVPN_NAME` 을 올바른 번호(예: `vpn2051.ovpn`)로 바꾸세요.
+  번호는 **운영진에게 'SSL-VPN 프로필/서버 번호'** 로 문의하면 됩니다.
+  - 대안: 공식 Agent(Windows/macOS)에서 받은 `.ovpn` 파일이 있으면 `./transfer/naver-vpn.ovpn`
+    로 두면 그대로 사용합니다(번호 몰라도 됨).
 - 그 외 점검 순서: VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`.
 
 ## 서버 반납 일정

@@ -90,12 +90,26 @@ ensure_vpn() {
     return 1
   fi
 
-  local pbody
-  pbody="$(printf '%s' "$resp" | jq -r '.profile_body // ""')"
-  if [[ -z "$pbody" ]]; then echo ">> 응답에 프로필(profile_body)이 없습니다." >&2; return 1; fi
-  printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || \
-    printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null || \
-    { echo ">> 프로필 디코드 실패" >&2; return 1; }
+  # 프로필(.ovpn) 확보: ① 로컬 파일이 있으면 그걸 사용(공식 앱에서 받은 프로필),
+  # ② 없으면 authstate 응답의 profile_body 사용.
+  local localprof="${VPN_PROFILE:-/work/transfer/naver-vpn.ovpn}" pbody
+  if [[ -s "$localprof" ]]; then
+    cp "$localprof" "$prof"
+    echo ">> 로컬 프로필 사용: $localprof" >&2
+  else
+    pbody="$(printf '%s' "$resp" | jq -r '.profile_body // ""')"
+    if [[ -z "$pbody" ]]; then
+      echo ">> 서버가 프로필(.ovpn)을 주지 않았습니다. 서버 메시지:" >&2
+      echo "   $(printf '%s' "$resp" | jq -r '.err_msg // "(없음)"' 2>/dev/null)" >&2
+      echo ">> 해결: .env 의 VPN_OVPN_NAME 을 이 테넌트의 올바른 프로필(예: vpn<번호>.ovpn)로 바꾸세요." >&2
+      echo ">> (번호는 운영진에게 'SSL-VPN 프로필/서버 번호' 로 문의. 또는 공식 앱에서 받은 .ovpn 파일을" >&2
+      echo ">>  ./transfer/naver-vpn.ovpn 로 두면 그대로 사용합니다.)" >&2
+      return 1
+    fi
+    printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || \
+      printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null || \
+      { echo ">> 프로필 디코드 실패" >&2; return 1; }
+  fi
 
   local otp
   echo ">> 1차 인증 성공. 이메일/SMS로 받은 OTP 코드를 입력하고 Enter:" >&2
