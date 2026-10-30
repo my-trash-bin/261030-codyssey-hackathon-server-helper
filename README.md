@@ -26,7 +26,7 @@ VPN 사용 시 호스트에 `/dev/net/tun` 이 필요합니다(리눅스 기본 
   just up
   ```
   mise 가 셸에 활성화돼 있지 않으면 `mise exec -- just <명령>` 형태로 쓰세요.
-- **`just` 없이**: 동일 기능의 셸 래퍼 `./hak <명령>` (예: `./hak ssh-gpu`, `./hak down`)
+- **`just` 없이**: 동일 기능의 셸 래퍼 `./hak <명령>` (예: `./hak ssh-gpu`, `./hak shutdown`)
 
 아래 예시는 `just` 기준이며, 모든 명령은 `./hak` 로도 동일하게 동작합니다.
 
@@ -94,11 +94,20 @@ just download-gpu ~/result.zip
 just ssh-gpu                         # GPU 서버 접속   / just ssh-general
 just upload-gpu   <로컬경로> [원격경로]    # 업로드
 just download-gpu <원격경로> [로컬경로]    # 다운로드
-just down                            # 정리 / 초기화
+just shutdown                        # 종료 (저장된 프로필은 유지)
+just remove                          # 종료 + 저장된 인증 정보까지 삭제 (완전 초기화)
 ```
 
-컨테이너 시작과 VPN 연결은 전부 자동입니다. 문제가 생기면 `just down` 후 다시
-`just ssh-*` 하면 처음부터 재연결(OTP 재입력)됩니다.
+컨테이너 시작과 VPN 연결은 전부 자동입니다.
+
+**인증 정보 유지에 대해:**
+- **컨테이너를 켜 둔 동안**에는 VPN 세션이 유지되어 `ssh-*`/`upload`/`download` 를
+  **OTP 재입력 없이** 바로 쓸 수 있습니다.
+- `shutdown` 은 컨테이너만 내리고 **받아둔 VPN 프로필(.ovpn/인증서)은 저장해 둡니다.**
+  다음에 다시 켜면 프로필을 재사용하므로 더 빠릅니다.
+- 단, **OTP(1회용 코드)는 보관할 수 없습니다.** 컨테이너를 완전히 내린 뒤 다시 접속하면
+  OTP는 한 번 더 입력해야 합니다(VPN 2차 인증 특성).
+- `remove` 는 저장된 프로필까지 지워 **완전 초기화**합니다. 문제가 꼬였을 때 쓰세요.
 
 > 참고: 디버깅용 숨은 명령(`check`, `shell`, `logs`, `vpn-stop`)도 있지만 평소엔 필요 없습니다.
 

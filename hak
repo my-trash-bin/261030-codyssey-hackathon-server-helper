@@ -3,7 +3,8 @@
 #   ./hak ssh-gpu          ./hak ssh-general        # 서버 접속(컨테이너+VPN 자동)
 #   ./hak upload-gpu <로컬> [원격]                   # 업로드
 #   ./hak download-gpu <원격> [로컬]                 # 다운로드
-#   ./hak down                                      # 정리 / 초기화
+#   ./hak shutdown                                  # 종료(저장된 프로필 유지)
+#   ./hak remove                                    # 종료 + 저장된 인증 정보 삭제
 set -eu
 
 ensure_up() {
@@ -16,9 +17,10 @@ cmd="${1:-help}"; shift 2>/dev/null || true
 EX="docker compose exec -it access"
 
 case "$cmd" in
-  up)     ensure_up; echo ">> 준비 완료. ./hak ssh-gpu 로 접속하세요." ;;
-  down)   docker compose down ;;
-  logs)   docker compose logs -f access ;;
+  up)       ensure_up; echo ">> 준비 완료. ./hak ssh-gpu 로 접속하세요." ;;
+  shutdown) docker compose down ;;
+  remove)   docker compose down --volumes; echo ">> 저장된 VPN 프로필을 삭제했습니다. (직접 둔 ./transfer/naver-vpn.ovpn 는 필요 시 수동 삭제)" ;;
+  logs)     docker compose logs -f access ;;
   shell)  ensure_up; $EX bash ;;
   ssh-general)      ensure_up; $EX ssh-to.sh general ;;
   ssh-gpu)          ensure_up; $EX ssh-to.sh gpu ;;
@@ -30,5 +32,5 @@ case "$cmd" in
   vpn)              ensure_up; $EX vpn.sh ;;
   vpn-stop)         docker compose exec access vpn-stop.sh ;;
   help|*)
-    sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

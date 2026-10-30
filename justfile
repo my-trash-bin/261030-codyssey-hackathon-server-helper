@@ -7,8 +7,10 @@
 #   just ssh-gpu        just ssh-general        # 서버 접속
 #   just upload-gpu <로컬> [원격]               # 업로드
 #   just download-gpu <원격> [로컬]             # 다운로드
-#   just down                                   # 정리 / 초기화
-# (컨테이너 시작·VPN 연결은 자동. 최초 접속 때 OTP만 한 번 입력)
+#   just shutdown                               # 종료(저장된 프로필은 유지)
+#   just remove                                 # 종료 + 저장된 인증 정보까지 삭제
+# (컨테이너 시작·VPN 연결은 자동. 최초 접속 때 OTP만 한 번 입력.
+#  OTP는 1회용이라 저장 불가 — 컨테이너를 켜 두면 재입력 없이 계속 사용 가능)
 
 _default:
     @just --list
@@ -37,9 +39,15 @@ download-gpu remote dest="": _up
 download-general remote dest="": _up
     docker compose exec -it access download.sh general "{{remote}}" {{dest}}
 
-# 정리 (컨테이너 제거 = VPN 끊김). 다시 접속하면 처음부터 자동 재연결.
-down:
+# 종료 (컨테이너 제거 = VPN 끊김). 저장된 프로필은 유지되어 다음 접속이 빨라짐.
+shutdown:
     docker compose down
+
+# 종료 + 저장된 인증 정보(프로필 볼륨) 삭제 → 완전 초기화.
+remove:
+    docker compose down --volumes
+    @echo ">> 저장된 VPN 프로필을 삭제했습니다."
+    @echo ">> (직접 둔 ./transfer/naver-vpn.ovpn 가 있다면 필요 시 수동 삭제하세요.)"
 
 # ── 이하 내부/디버깅용 (평소엔 쓸 일 없음) ───────────────────────
 

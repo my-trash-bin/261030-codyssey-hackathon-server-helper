@@ -69,8 +69,10 @@ ensure_vpn() {
   fi
 
   local api="https://${VPN_SERVER}:${VPN_PORT}/api/v3/authstate"
-  local dir=/run/vpn prof=/run/vpn/profile.ovpn authf=/run/vpn/auth log=/var/log/vpn.log
-  mkdir -p "$dir"; chmod 700 "$dir"
+  # prof(.ovpn)은 영속 볼륨(/data/vpn)에 저장 → shutdown 후에도 재사용. ('remove' 시 삭제)
+  # authf(아이디+OTP)는 1회용이라 ephemeral(/run/vpn)에 두고 연결 후 즉시 삭제.
+  local prof=/data/vpn/profile.ovpn authf=/run/vpn/auth log=/var/log/vpn.log
+  mkdir -p /data/vpn /run/vpn; chmod 700 /data/vpn /run/vpn
 
   local mac
   mac="$(ip -o link show 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="link/ether"){m=$(i+1); gsub(":","-",m); print toupper(m); exit}}')"
@@ -90,12 +92,15 @@ ensure_vpn() {
     return 1
   fi
 
-  # 프로필(.ovpn) 확보: ① 로컬 파일이 있으면 그걸 사용(공식 앱에서 받은 프로필),
-  # ② 없으면 authstate 응답의 profile_body 사용.
+  # 프로필(.ovpn) 확보 우선순위:
+  #   ① 사용자가 둔 로컬 파일(공식 앱에서 받은 것) → ② 이전에 저장해 둔 프로필(볼륨)
+  #   → ③ authstate 응답의 profile_body (받으면 볼륨에 저장해 다음부터 재사용)
   local localprof="${VPN_PROFILE:-/work/transfer/naver-vpn.ovpn}" pbody
   if [[ -s "$localprof" ]]; then
     cp "$localprof" "$prof"
     echo ">> 로컬 프로필 사용: $localprof" >&2
+  elif [[ -s "$prof" ]]; then
+    echo ">> 저장된 프로필 재사용: $prof  (초기화하려면 'just remove')" >&2
   else
     pbody="$(printf '%s' "$resp" | jq -r '.profile_body // ""')"
     if [[ -z "$pbody" ]]; then
@@ -109,6 +114,7 @@ ensure_vpn() {
     printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || \
       printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null || \
       { echo ">> 프로필 디코드 실패" >&2; return 1; }
+    echo ">> 프로필을 저장했습니다(다음부터 재사용): $prof" >&2
   fi
 
   local otp

@@ -11,6 +11,10 @@ services:
     volumes:
       - ./transfer:/work/transfer   # 서버와 주고받을 파일 공유 폴더
       - ./known_hosts:/root/.ssh/known_hosts
+      - vpnstate:/data/vpn          # VPN 프로필(.ovpn) 저장 — shutdown 후에도 유지
     stdin_open: true
     tty: true
     restart: "no"
+
+volumes:
+  vpnstate:                         # 'remove' 하면 이 볼륨(저장된 인증 정보)이 삭제됨
