@@ -108,20 +108,18 @@ ensure_vpn() {
     echo ">> 1차 인증 성공 (OTP 불필요)." >&2
   fi
 
-  # 프로필(.ovpn) 확보 우선순위:
-  #   ① 사용자가 둔 로컬 파일(공식 앱에서 받은 것) → ② authstate 직수신(profile_body)
-  #   → ③ /api/v3/profile 다운로드 (state + OTP)
+  # 프로필(.ovpn) 확보.
+  #
+  # ★ OTP(2차 인증) 흐름에서는 공식 앱과 '똑같이' 매 연결마다 /api/v3/profile 로
+  #    OTP를 제출해야 한다. 이 호출이 게이트웨이의 OTP 세션을 '활성화'하며,
+  #    그래야 뒤이어 openvpn 이 같은 아이디+OTP 로 터널 인증에 성공한다.
+  #    (이 단계를 건너뛰고 저장/로컬 프로필을 재사용하면 TLS 핸드셰이크까지는
+  #     되지만 PUSH_REQUEST 직후 AUTH_FAILED 로 끊긴다 — 실측 확인.)
+  #    그래서 state 가 있으면 저장/로컬 프로필 재사용 최적화는 적용하지 않는다.
+  # state 가 없을 때(OTP 불필요 테넌트)만: 로컬 파일 → authstate 직수신 → 저장본 재사용.
   local localprof="${VPN_PROFILE:-/work/transfer/naver-vpn.ovpn}"
-  if [[ -s "$localprof" ]]; then
-    cp "$localprof" "$prof"; echo ">> 로컬 프로필 사용: $localprof" >&2
-  elif [[ "${VPN_REFRESH:-0}" != "1" && -s "$prof" ]]; then
-    echo ">> 저장된 프로필 재사용: $prof  (새로 받으려면 VPN_REFRESH=1 또는 'just remove')" >&2
-  elif [[ -n "$pbody" && "$pbody" != "null" ]]; then
-    printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null \
-      || { echo ">> 프로필 디코드 실패" >&2; return 1; }
-    echo ">> 프로필 수신 완료." >&2
-  else
-    echo ">> 프로필 다운로드 중 (/api/v3/profile)..." >&2
+  if [[ -n "$state" ]]; then
+    echo ">> 프로필 다운로드 중 (/api/v3/profile, OTP 제출)..." >&2
     local resp2 pbody2 pname
     resp2="$(_vpn_api /api/v3/profile "$(jq -nc --arg u "$VPN_ID" --arg o "$otp" --arg s "$state" --arg cv "$cver" \
       '{user_id:$u, auth_type:1, otp_passwd:$o, state:$s, client_version:$cv, os_name:"linux", os_version:"docker"}')")"
@@ -136,6 +134,17 @@ ensure_vpn() {
     printf '%s' "$pbody2" | base64 -d > "$prof" 2>/dev/null || printf '%s' "$pbody2" | base64 -di > "$prof" 2>/dev/null \
       || { echo ">> 프로필 디코드 실패" >&2; return 1; }
     echo ">> 프로필 저장: $pname" >&2
+  elif [[ -s "$localprof" ]]; then
+    cp "$localprof" "$prof"; echo ">> 로컬 프로필 사용: $localprof" >&2
+  elif [[ -n "$pbody" && "$pbody" != "null" ]]; then
+    printf '%s' "$pbody" | base64 -d > "$prof" 2>/dev/null || printf '%s' "$pbody" | base64 -di > "$prof" 2>/dev/null \
+      || { echo ">> 프로필 디코드 실패" >&2; return 1; }
+    echo ">> 프로필 수신 완료." >&2
+  elif [[ -s "$prof" ]]; then
+    echo ">> 저장된 프로필 재사용: $prof" >&2
+  else
+    echo ">> 프로필을 확보할 수 없습니다 (state/OTP·로컬·저장 프로필 모두 없음)." >&2
+    return 1
   fi
 
   # 벤더 프로필은 구버전 openvpn 기준이라 2.6 에서 제거된 지시어가 있을 수 있다.
