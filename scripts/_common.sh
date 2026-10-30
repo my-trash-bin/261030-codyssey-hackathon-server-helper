@@ -32,16 +32,19 @@ resolve_target() {
   )
 }
 
-# ── VPN 자동 연결 ─────────────────────────────────────────────
-# ppp0 인터페이스 존재 = VPN 연결됨으로 판단.
-_vpn_up() { ip link show ppp0 >/dev/null 2>&1; }
+# ── VPN 자동 연결 (openconnect / F5 BIG-IP) ───────────────────
+# NCP 공공존 SSL VPN은 F5 BIG-IP Edge 기반이라 openconnect --protocol=f5 로 붙는다.
+# tun 인터페이스 존재 = VPN 연결됨으로 판단.
+_vpn_up() { ip -o link show type tun 2>/dev/null | grep -q .; }
+_vpn_dev() { ip -o link show type tun 2>/dev/null | awk -F': ' 'NR==1{print $2}'; }
 
-# 대상 IP가 VPN(ppp0)으로 라우팅되도록 보장 (스플릿 터널 보완).
+# 대상 IP가 VPN(tun)으로 라우팅되도록 보장 (스플릿 터널 보완).
 _vpn_route() {
-  local ip="${1:-}"
+  local ip="${1:-}" dev
   [[ -z "$ip" ]] && return 0
-  ip route get "$ip" 2>/dev/null | grep -q 'dev ppp0' && return 0
-  ip route add "$ip" dev ppp0 2>/dev/null || true
+  dev="$(_vpn_dev)"; [[ -z "$dev" ]] && return 0
+  ip route get "$ip" 2>/dev/null | grep -q "dev $dev" && return 0
+  ip route add "$ip" dev "$dev" 2>/dev/null || true
 }
 
 # VPN이 안 올라와 있으면 올린다. 올라와 있으면 즉시 반환.
@@ -61,32 +64,30 @@ ensure_vpn() {
     return 1
   fi
 
-  local log=/var/log/vpn.log pidf=/run/vpn.pid pid
+  local log=/var/log/vpn.log pidf=/run/vpn.pid
   echo "" >&2
-  echo ">> SSL-VPN 미연결 → 연결을 시작합니다 (${VPN_SERVER}:${VPN_PORT})." >&2
-  echo ">> 이메일/SMS로 받은 OTP 코드를 입력하고 Enter 를 누르세요." >&2
+  echo ">> SSL-VPN(F5) 연결을 시작합니다 (${VPN_SERVER}:${VPN_PORT})." >&2
+  echo ">> 비밀번호는 .env에서 자동 입력됩니다." >&2
+  echo ">> 이메일/SMS로 받은 OTP 코드를 입력하고 Enter 를 누르세요:" >&2
 
-  # 컨테이너에 상주시킨다. stdin은 터미널(OTP 입력용), 로그는 파일로.
-  # setsid로 제어 터미널에서 분리해야 백그라운드에서도 stdin을 읽을 수 있다.
-  setsid openfortivpn "${VPN_SERVER}:${VPN_PORT}" \
-    --username="${VPN_ID}" --password="${VPN_PW}" \
-    --otp-prompt="token" --persistent=5 \
-    >"$log" 2>&1 < /dev/tty &
-  echo $! >"$pidf"
-  pid="$(cat "$pidf")"
+  # 비밀번호(.env)는 stdin 첫 줄로, OTP는 터미널에서 이어 입력.
+  # openconnect -b: 인증/연결 후 스스로 백그라운드로 상주.
+  ( printf '%s\n' "$VPN_PW"; exec cat /dev/tty ) | \
+    openconnect --protocol=f5 --user="$VPN_ID" --passwd-on-stdin -b \
+      --pid-file="$pidf" "https://${VPN_SERVER}:${VPN_PORT}" \
+      >"$log" 2>&1 || true
 
   local i
-  for i in $(seq 1 90); do
+  for i in $(seq 1 60); do
     if _vpn_up; then
       sleep 1
       _vpn_route "$ip"
       echo ">> VPN 연결됨." >&2
       return 0
     fi
-    if ! kill -0 "$pid" 2>/dev/null; then
-      echo ">> VPN 연결 실패. 최근 로그:" >&2; tail -n 20 "$log" >&2; return 1
-    fi
     sleep 1
   done
-  echo ">> VPN 연결 시간 초과. 최근 로그:" >&2; tail -n 20 "$log" >&2; return 1
+  echo ">> VPN 연결 실패/시간초과. 최근 로그:" >&2; tail -n 30 "$log" >&2
+  echo ">> (수동 확인) docker compose exec -it access sh -c 'openconnect --protocol=f5 -u \"\$VPN_ID\" \"https://\$VPN_SERVER:\$VPN_PORT\"'" >&2
+  return 1
 }

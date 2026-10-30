@@ -102,16 +102,21 @@ just down                            # 정리 / 초기화
 
 > 참고: 디버깅용 숨은 명령(`check`, `shell`, `logs`, `vpn-stop`)도 있지만 평소엔 필요 없습니다.
 
-## VPN 클라이언트에 대한 참고 (중요)
+## VPN 클라이언트에 대한 참고
 
-이 토이킷의 VPN 연결은 `openfortivpn`(Fortinet 계열 SSL-VPN CLI)을 사용합니다.
-공공존 게이트웨이가 Fortinet 호환이 **아닐 경우** 자동 VPN 연결이 실패할 수 있습니다.
-공공존 VPC는 Windows/macOS용 공식 *NAVER Cloud SSL VPN Agent* 만 제공하며
-Linux CLI는 공식 지원되지 않습니다.
+NCP 공공존 SSL VPN은 **F5 BIG-IP Edge** 기반입니다. 공식 Agent는 Windows/macOS
+전용이지만, 리눅스에서는 **`openconnect --protocol=f5`** 로 붙을 수 있어 이 토이킷은
+컨테이너 안에서 openconnect로 자동 연결합니다 (별도 VM·공식 Agent 불필요).
 
-- 공식 Agent가 동작하는 OS를 쓸 수 있다면, 호스트에서 먼저 VPN을 연결한 뒤
-  `docker-compose.yml` 에 `network_mode: host` 를 더해 쓰는 방법이 가장 확실합니다.
-- 그 경우에도 `ssh-to.sh` / `upload.sh` / `download.sh` 는 그대로 동작합니다.
+인증 흐름: 비밀번호는 `.env` 에서 자동 입력되고, **OTP(이메일/SMS 코드)만 접속 시
+한 번 터미널에서 입력**하면 됩니다.
+
+자동 연결이 안 되면 아래로 수동 확인할 수 있습니다(비번·OTP 모두 직접 입력):
+
+```bash
+docker compose exec -it access sh -c \
+  'openconnect --protocol=f5 -u "$VPN_ID" "https://$VPN_SERVER:$VPN_PORT"'
+```
 
 연결 문제 시 점검 순서(VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`)를 따르세요.
 
