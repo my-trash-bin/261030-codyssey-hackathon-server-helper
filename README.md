@@ -178,6 +178,40 @@ OTP를 아낄 수 없음). **OTP 재입력 없이 쓰려면 컨테이너를 켜 
   프로필을 추출해 `transfer/naver-vpn.ovpn` 에 두면 그 파일을 그대로 씁니다.
 - 그 외 점검 순서: VPN 연결 → 사설 IP → SSH 포트 → 계정 `ncloud`.
 
+## 유지보수 참고: 이 흐름을 어디서 얻었나 (출처)
+
+이 도구의 2단계 v3 API 흐름과 터널 인증 방식은 **공식 클라이언트를 역추적해서** 얻은
+것입니다. 다른 사람이 이어받아 디버깅할 때 원본을 다시 확인할 수 있게 출처를 남깁니다.
+
+- **원본**: NAVER Cloud SSL VPN 공식 Agent(macOS/Windows). 내부 식별자는
+  `ncurion-sa-client`, TLS 인증서 CN 은 `ncurion-sa`. Electron 앱이라 핵심 로직이
+  `…/Resources/app.asar` 안의 자바스크립트에 그대로 있습니다.
+- **추출 방법**: 공식 앱(.dmg/.app)에서 `app.asar` 를 꺼내 `npx asar extract` 로 풀면
+  IPC 핸들러에 API 호출과 openvpn 실행 인자가 들어 있습니다. (`tools/extract-ovpn.sh`
+  = `just get-ovpn` 는 같은 앱에서 .ovpn 프로필만 뽑아내는 대안 경로입니다.)
+- **거기서 확인한 사실**(이 도구가 그대로 재현):
+  - `login` → `POST {domain}:8443/api/v3/authstate`
+    (`{user_id, passwd, type, ovpn_file_name, client_version, os_name, os_version, mac}`)
+    → `state` 수신 + OTP 발송.
+  - `download-profile` → `POST /api/v3/profile`
+    (`{user_id, auth_type, otp_passwd, state, client_version, os_name, os_version}`)
+    → base64 `.ovpn`(인증서 포함) 수신. **앱은 매 연결마다 OTP 를 이 호출로 제출**합니다.
+  - `create-auth` 는 `auth-file.txt` 를 `"<username>\n<otp 또는 pw>"` 로 쓰고,
+    openvpn 을 `--config <ovpn> --auth-user-pass auth-file.txt` 로 띄웁니다.
+  - management 포트(예: 7501)는 **통계(`bytecount`)·종료(`signal SIGTERM`)** 전용이고
+    인증과 무관합니다. `static-challenge`/`SCRV1` 같은 추가 챌린지도 없습니다.
+- **공공존 게이트웨이에서 추가로 알아낸 것**(앱 코드엔 안 드러남, 실험으로 확정):
+  `/api/v3/profile` 가 OTP 를 정상 수락해도 **같은 OTP 로는 터널 인증이 거부**됩니다.
+  즉 이 게이트웨이에서 **OTP 는 프로필(인증서) 발급 게이트일 뿐이고, 터널 `auth-user-pass`
+  비밀번호는 계정 비밀번호**입니다. 그래서 `VPN_AUTH_MODE=auto` 가 OTP → 실패 시 계정
+  비밀번호 순으로 시도합니다. (자세한 증상·근거는 위 "VPN 클라이언트에 대한 참고" 참조.)
+- **구현 위치**: API 2단계 흐름은 `scripts/_common.sh` 의 `ensure_vpn`(및 동일 로직의
+  `tools/fetch-ovpn.py`), openvpn 2.6 호환을 위한 프로필 정제(`keysize`/`ns-cert-type`
+  등 주석 처리)도 같은 함수 안에 있습니다.
+
+> 참고: 추출한 `app.asar`·.dmg 등 공식 앱 산출물은 저장소에 **커밋하지 않습니다**
+> (재배포·라이선스 문제 회피). 필요하면 공식 앱을 직접 내려받아 위 방법으로 다시 확인하세요.
+
 ## 서버 반납 일정
 
 운영진 공지 기준 삭제 일정 확인 — 삭제 후 복구 불가하니 사전 백업 필수.
